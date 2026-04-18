@@ -1,0 +1,112 @@
+﻿<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Тест взглядов на отношения</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main class="page">
+    <section class="hero card">
+      <h1>Тест взглядов на отношения</h1>
+      <p class="lead">Опрос оценивает позицию по двум осям:</p>
+      <ul class="axis-list">
+        <li><strong>X:</strong> партнёрство ↔ конкуренция</li>
+        <li><strong>Y:</strong> агентность ↔ детерминизм</li>
+      </ul>
+      <div class="scale">
+        <h2>Шкала ответов</h2>
+        <ol>
+          <li>Полностью не согласен</li>
+          <li>Скорее не согласен</li>
+          <li>Нейтрально / зависит</li>
+          <li>Скорее согласен</li>
+          <li>Полностью согласен</li>
+        </ol>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-head">
+          <span>Прогресс</span>
+          <span id="progressText">0 / 24</span>
+        </div>
+        <div class="progress-bar" aria-hidden="true">
+          <div id="progressFill" class="progress-fill"></div>
+        </div>
+      </div>
+      <a class="method-link" href="/methodology.html">Открыть страницу методологии</a>
+    </section>
+
+    <section class="card">
+      <div id="validationMessage" class="message" hidden></div>
+      <form id="testForm" novalidate>
+        <div id="questionsContainer" class="questions"></div>
+        <div class="actions">
+          <button type="button" id="calculateBtn" class="btn btn-primary">Рассчитать результат</button>
+          <button type="button" id="resetBtn" class="btn btn-secondary">Сбросить</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="resultSection" class="card result" hidden>
+      <h2>Ваш результат</h2>
+      <div class="result-grid">
+        <div class="metric"><span class="label">Raw X / Y</span><strong id="rawCoords">—</strong></div>
+        <div class="metric"><span class="label">Нормализованные X / Y</span><strong id="normCoords">—</strong></div>
+        <div class="metric"><span class="label">Квадрант</span><strong id="quadrantValue">—</strong></div>
+        <div class="metric"><span class="label">Выраженность</span><strong id="distanceValue">—</strong></div>
+        <div class="metric"><span class="label">Определённость</span><strong id="confidenceValue">—</strong></div>
+      </div>
+
+      <div class="compass-wrap">
+        <h3>2D-компас позиции</h3>
+        <div class="compass" id="compass">
+          <div class="quad quad-top-left"></div>
+          <div class="quad quad-top-right"></div>
+          <div class="quad quad-bottom-left"></div>
+          <div class="quad quad-bottom-right"></div>
+          <div class="axis axis-x"></div>
+          <div class="axis axis-y"></div>
+          <div class="axis-arrow axis-arrow-up"></div>
+          <div class="axis-arrow axis-arrow-down"></div>
+          <div class="axis-arrow axis-arrow-left"></div>
+          <div class="axis-arrow axis-arrow-right"></div>
+          <div class="center-dot"></div>
+          <div class="center-box">
+            <strong>Центр</strong>
+            <span>умеренная позиция</span>
+          </div>
+          <div class="axis-label left">Партнёрство</div>
+          <div class="axis-label right">Конкуренция</div>
+          <div class="axis-label top">Агентность</div>
+          <div class="axis-label bottom">Детерминизм</div>
+          <div class="corner-label top-left">Гибкое партнёрство</div>
+          <div class="corner-label top-right">Стратегическая конкуренция</div>
+          <div class="corner-label bottom-left">Структурированное партнёрство</div>
+          <div class="corner-label bottom-right">Фиксированная конкуренция</div>
+          <div id="userPoint" class="user-point" title="Ваша позиция"></div>
+        </div>
+      </div>
+
+      <div class="summary-wrap">
+        <h3>Текстовое саммари</h3>
+        <div id="summaryText" class="summary"></div>
+      </div>
+
+      <div class="reference-wrap">
+        <h3>Референсная схема</h3>
+        <img class="reference-image" src="/compass-reference.png" alt="Компас взглядов в маносфере" loading="lazy" />
+      </div>
+
+      <div class="actions">
+        <button type="button" id="copyBtn" class="btn btn-secondary">Скопировать результат</button>
+        <button type="button" id="downloadBtn" class="btn btn-secondary">Скачать результат как JSON</button>
+      </div>
+      <div id="copyMessage" class="copy-message" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <script src="/questions.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
