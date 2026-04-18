@@ -1,0 +1,85 @@
+﻿<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Анонимная статистика теста</title>
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    .stats-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+    .stat-card { border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: #fcfdff; }
+    .stat-card .k { color: var(--muted); font-size: .86rem; display: block; margin-bottom: 6px; }
+    .bar-list { display: grid; gap: 8px; }
+    .bar-row { display: grid; grid-template-columns: 180px 1fr 52px; gap: 8px; align-items: center; }
+    .bar-label { font-size: .9rem; }
+    .bar-track { background: #e9eef4; height: 10px; border-radius: 999px; overflow: hidden; }
+    .bar-fill { height: 100%; background: linear-gradient(90deg, #2b84c0, #3fb07a); }
+    .bar-val { text-align: right; color: var(--muted); font-size: .85rem; }
+    .table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 12px; }
+    table { width: 100%; border-collapse: collapse; min-width: 740px; }
+    th, td { border-bottom: 1px solid #e8edf3; padding: 8px 10px; text-align: left; font-size: .9rem; vertical-align: top; }
+    th { background: #f5f9fd; position: sticky; top: 0; z-index: 1; }
+    .muted { color: var(--muted); }
+    @media (max-width: 700px) {
+      .bar-row { grid-template-columns: 1fr; }
+      .bar-val { text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="card">
+      <h1>Анонимная статистика</h1>
+      <p class="lead">Эта страница показывает только агрегированные обезличенные данные: без IP, e-mail и персональных идентификаторов.</p>
+      <p><a class="method-link" href="/">Вернуться к тесту</a></p>
+    </section>
+
+    <section class="card" id="statusCard">
+      <p class="lead">Загрузка статистики...</p>
+    </section>
+
+    <section class="card" id="contentCard" hidden>
+      <h2>Общие метрики</h2>
+      <div class="stats-grid" id="metricsGrid"></div>
+    </section>
+
+    <section class="card" id="quadrantsCard" hidden>
+      <h2>Распределение по квадрантам</h2>
+      <div class="bar-list" id="quadrantsBars"></div>
+    </section>
+
+    <section class="card" id="bandsCard" hidden>
+      <h2>Распределение по осям и выраженности</h2>
+      <h3>Ось X</h3>
+      <div class="bar-list" id="xBandsBars"></div>
+      <h3>Ось Y</h3>
+      <div class="bar-list" id="yBandsBars"></div>
+      <h3>Выраженность позиции</h3>
+      <div class="bar-list" id="distanceBandsBars"></div>
+      <h3>Определённость</h3>
+      <div class="bar-list" id="confidenceBandsBars"></div>
+    </section>
+
+    <section class="card" id="questionsCard" hidden>
+      <h2>Средние ответы по вопросам</h2>
+      <p class="muted">Показывается средний балл (1..5) и количество наблюдений по каждому вопросу.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Вопрос</th>
+              <th>Средний балл</th>
+              <th>Наблюдений</th>
+            </tr>
+          </thead>
+          <tbody id="questionsBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="/questions.js"></script>
+  <script src="/analytics.js"></script>
+</body>
+</html>

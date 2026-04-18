@@ -183,6 +183,7 @@
 
     STORAGE.setItem(STORAGE_KEYS.answers, JSON.stringify(answers));
     STORAGE.setItem(STORAGE_KEYS.result, JSON.stringify(result));
+    sendAnalytics(result, answers);
 
     renderResult(result);
     refs.resultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -537,5 +538,36 @@
 
   function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
+  }
+
+  function sendAnalytics(result, answers) {
+    const payload = {
+      timestamp: new Date().toISOString(),
+      result: {
+        normalized: result.normalized,
+        quadrant: result.quadrant,
+        distance: { percent: result.distance.percent },
+        confidence: {
+          value: result.confidence.value,
+          neutralCount: result.confidence.neutralCount
+        }
+      },
+      answers
+    };
+
+    const body = JSON.stringify(payload);
+
+    // sendBeacon is non-blocking and does not affect UX on slow networks.
+    if (navigator.sendBeacon) {
+      const blob = new Blob([body], { type: 'application/json' });
+      navigator.sendBeacon('/api/analytics/result', blob);
+      return;
+    }
+
+    fetch('/api/analytics/result', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body
+    }).catch(() => {});
   }
 })();
