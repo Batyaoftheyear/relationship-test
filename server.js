@@ -15,6 +15,12 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABA
 const supabase = SUPABASE_URL && SUPABASE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } })
   : null;
+const QUESTION_SCORING = {
+  xPositive: [1, 3, 5, 7, 9, 11],
+  xNegative: [2, 4, 6, 8, 10, 12],
+  yPositive: [13, 15, 17, 19, 21, 23, 24],
+  yNegative: [14, 16, 18, 20, 22]
+};
 
 app.use(express.json({ limit: '100kb' }));
 app.use(express.static(PUBLIC_DIR));
@@ -237,8 +243,6 @@ function sanitizeAnalyticsPayload(input) {
   const answers = input.answers;
   if (!result || typeof result !== 'object' || !answers || typeof answers !== 'object') return null;
 
-  const rawX = toInteger(result?.raw?.x);
-  const rawY = toInteger(result?.raw?.y);
   const x = toInteger(result?.normalized?.x);
   const y = toInteger(result?.normalized?.y);
   const distancePercent = toInteger(result?.distance?.percent);
@@ -246,7 +250,6 @@ function sanitizeAnalyticsPayload(input) {
   const neutralCount = toInteger(result?.confidence?.neutralCount);
   const quadrant = typeof result?.quadrant === 'string' ? result.quadrant : '';
 
-  if (!isFiniteNumber(rawX) || !isFiniteNumber(rawY)) return null;
   if (!isFiniteNumber(x) || !isFiniteNumber(y)) return null;
   if (!isFiniteNumber(distancePercent) || !isFiniteNumber(confidence) || !isFiniteNumber(neutralCount)) return null;
   if (!['Гибкое партнёрство', 'Стратегическая конкуренция', 'Структурированное партнёрство', 'Фиксированная конкуренция'].includes(quadrant)) return null;
@@ -257,6 +260,14 @@ function sanitizeAnalyticsPayload(input) {
     if (![1, 2, 3, 4, 5].includes(value)) return null;
     safeAnswers[String(i)] = value;
   }
+
+  const fallbackRaw = calculateRawFromAnswers(safeAnswers);
+  const rawX = isFiniteNumber(toInteger(result?.raw?.x))
+    ? toInteger(result.raw.x)
+    : fallbackRaw.x;
+  const rawY = isFiniteNumber(toInteger(result?.raw?.y))
+    ? toInteger(result.raw.y)
+    : fallbackRaw.y;
 
   return {
     timestamp: typeof input.timestamp === 'string' ? input.timestamp : new Date().toISOString(),
@@ -274,6 +285,15 @@ function sanitizeAnalyticsPayload(input) {
       quadrant
     },
     answers: safeAnswers
+  };
+}
+
+function calculateRawFromAnswers(answers) {
+  const sum = (ids) => ids.reduce((total, id) => total + toInteger(answers[String(id)]), 0);
+
+  return {
+    x: sum(QUESTION_SCORING.xPositive) - sum(QUESTION_SCORING.xNegative),
+    y: sum(QUESTION_SCORING.yPositive) - sum(QUESTION_SCORING.yNegative)
   };
 }
 
