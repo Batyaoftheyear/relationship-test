@@ -647,7 +647,7 @@
 
     const body = JSON.stringify(payload);
 
-    fetch('/api/analytics/result', {
+    fetch('/api/result', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body,
@@ -657,7 +657,7 @@
     }).catch(() => {
       if (navigator.sendBeacon) {
         const blob = new Blob([body], { type: 'application/json' });
-        navigator.sendBeacon('/api/analytics/result', blob);
+        navigator.sendBeacon('/api/result', blob);
       }
     });
   }

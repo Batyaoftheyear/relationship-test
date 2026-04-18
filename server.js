@@ -37,7 +37,7 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
-app.post('/api/analytics/result', async (req, res) => {
+async function handleResultSubmission(req, res) {
   try {
     const payload = sanitizeAnalyticsPayload(req.body);
 
@@ -51,7 +51,10 @@ app.post('/api/analytics/result', async (req, res) => {
     console.error('Analytics write failed:', error.message);
     return res.status(500).json({ ok: false, error: 'analytics_write_failed' });
   }
-});
+}
+
+app.post('/api/result', handleResultSubmission);
+app.post('/api/analytics/result', handleResultSubmission);
 
 app.get('/api/analytics/summary', async (req, res) => {
   try {
