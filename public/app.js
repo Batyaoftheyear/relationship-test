@@ -647,17 +647,18 @@
 
     const body = JSON.stringify(payload);
 
-    // sendBeacon is non-blocking and does not affect UX on slow networks.
-    if (navigator.sendBeacon) {
-      const blob = new Blob([body], { type: 'application/json' });
-      navigator.sendBeacon('/api/analytics/result', blob);
-      return;
-    }
-
     fetch('/api/analytics/result', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body
-    }).catch(() => {});
+      body,
+      keepalive: true
+    }).then((response) => {
+      if (!response.ok) throw new Error('analytics_failed');
+    }).catch(() => {
+      if (navigator.sendBeacon) {
+        const blob = new Blob([body], { type: 'application/json' });
+        navigator.sendBeacon('/api/analytics/result', blob);
+      }
+    });
   }
 })();
