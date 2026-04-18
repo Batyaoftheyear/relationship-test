@@ -15,11 +15,19 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABA
 const supabase = SUPABASE_URL && SUPABASE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } })
   : null;
+const TOTAL_QUESTIONS = 28;
+const LEGACY_QUESTION_COUNT = 24;
+const QUADRANTS = [
+  'Гибкое партнёрство',
+  'Стратегическая конкуренция',
+  'Структурированное партнёрство',
+  'Фиксированная конкуренция'
+];
 const QUESTION_SCORING = {
-  xPositive: [1, 3, 5, 7, 9, 11],
-  xNegative: [2, 4, 6, 8, 10, 12],
+  xPositive: [1, 3, 5, 7, 9, 11, 25],
+  xNegative: [2, 4, 6, 8, 10, 12, 26],
   yPositive: [13, 15, 17, 19, 21, 23, 24],
-  yNegative: [14, 16, 18, 20, 22]
+  yNegative: [14, 16, 18, 20, 22, 27, 28]
 };
 
 app.use(express.json({ limit: '100kb' }));
@@ -116,24 +124,30 @@ function rowToAnalyticsPayload(row) {
   if (!row || typeof row !== 'object') return null;
 
   const quadrant = typeof row.quadrant === 'string' ? row.quadrant : '';
-  if (!['Гибкое партнёрство', 'Стратегическая конкуренция', 'Структурированное партнёрство', 'Фиксированная конкуренция'].includes(quadrant)) {
+  if (!QUADRANTS.includes(quadrant)) {
     return null;
   }
 
   const answers = {};
   const sourceAnswers = row.answers && typeof row.answers === 'object' ? row.answers : {};
-  for (let i = 1; i <= 24; i += 1) {
+  for (let i = 1; i <= TOTAL_QUESTIONS; i += 1) {
+    if (!Object.prototype.hasOwnProperty.call(sourceAnswers, String(i))) {
+      continue;
+    }
+
     const value = toInteger(sourceAnswers[String(i)]);
     if (![1, 2, 3, 4, 5].includes(value)) return null;
     answers[String(i)] = value;
   }
 
+  if (Object.keys(answers).length < LEGACY_QUESTION_COUNT) return null;
+
   return {
     timestamp: typeof row.created_at === 'string' ? row.created_at : new Date().toISOString(),
     result: {
       raw: {
-        x: clamp(toInteger(row.raw_x), -24, 24),
-        y: clamp(toInteger(row.raw_y), -18, 30)
+        x: clamp(toInteger(row.raw_x), -28, 28),
+        y: clamp(toInteger(row.raw_y), -28, 28)
       },
       normalized: {
         x: clamp(toInteger(row.x_norm), -100, 100),
@@ -142,7 +156,7 @@ function rowToAnalyticsPayload(row) {
       distance: { percent: clamp(toInteger(row.distance_percent), 0, 100) },
       confidence: {
         value: clamp(toInteger(row.confidence), 0, 100),
-        neutralCount: clamp(toInteger(row.neutral_count), 0, 24)
+        neutralCount: clamp(toInteger(row.neutral_count), 0, TOTAL_QUESTIONS)
       },
       quadrant
     },
@@ -169,11 +183,11 @@ function createEmptyAnalytics() {
     },
     bands: {
       x: {
-        'Сильное партнёрство': 0,
-        'Умеренное партнёрство': 0,
+        'Сильная открытость': 0,
+        'Умеренная открытость': 0,
         'Смешанная позиция': 0,
-        'Умеренная конкуренция': 0,
-        'Выраженная конкуренция': 0
+        'Умеренная стратегия': 0,
+        'Выраженная стратегия': 0
       },
       y: {
         'Высокая агентность': 0,
@@ -203,7 +217,7 @@ function createEmptyAnalytics() {
 
 function createQuestionBuckets() {
   const buckets = {};
-  for (let i = 1; i <= 24; i += 1) {
+  for (let i = 1; i <= TOTAL_QUESTIONS; i += 1) {
     buckets[String(i)] = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   }
   return buckets;
@@ -252,10 +266,10 @@ function sanitizeAnalyticsPayload(input) {
 
   if (!isFiniteNumber(x) || !isFiniteNumber(y)) return null;
   if (!isFiniteNumber(distancePercent) || !isFiniteNumber(confidence) || !isFiniteNumber(neutralCount)) return null;
-  if (!['Гибкое партнёрство', 'Стратегическая конкуренция', 'Структурированное партнёрство', 'Фиксированная конкуренция'].includes(quadrant)) return null;
+  if (!QUADRANTS.includes(quadrant)) return null;
 
   const safeAnswers = {};
-  for (let i = 1; i <= 24; i += 1) {
+  for (let i = 1; i <= TOTAL_QUESTIONS; i += 1) {
     const value = toInteger(answers[String(i)]);
     if (![1, 2, 3, 4, 5].includes(value)) return null;
     safeAnswers[String(i)] = value;
@@ -273,14 +287,14 @@ function sanitizeAnalyticsPayload(input) {
     timestamp: typeof input.timestamp === 'string' ? input.timestamp : new Date().toISOString(),
     result: {
       raw: {
-        x: clamp(rawX, -24, 24),
-        y: clamp(rawY, -18, 30)
+        x: clamp(rawX, -28, 28),
+        y: clamp(rawY, -28, 28)
       },
       normalized: { x: clamp(x, -100, 100), y: clamp(y, -100, 100) },
       distance: { percent: clamp(distancePercent, 0, 100) },
       confidence: {
         value: clamp(confidence, 0, 100),
-        neutralCount: clamp(neutralCount, 0, 24)
+        neutralCount: clamp(neutralCount, 0, TOTAL_QUESTIONS)
       },
       quadrant
     },
@@ -313,7 +327,9 @@ function applyAnalyticsEvent(db, payload) {
   db.bands.confidence[getConfidenceBand(payload.result.confidence.value)] += 1;
 
   Object.entries(payload.answers).forEach(([questionId, value]) => {
-    db.perQuestion[questionId][String(value)] += 1;
+    if (db.perQuestion[questionId]) {
+      db.perQuestion[questionId][String(value)] += 1;
+    }
   });
 
   const dayKey = normalizeDay(payload.timestamp);
@@ -333,7 +349,7 @@ function buildSummary(db) {
     : { x: 0, y: 0, distancePercent: 0, confidence: 0, neutralCount: 0 };
 
   const perQuestion = {};
-  for (let i = 1; i <= 24; i += 1) {
+  for (let i = 1; i <= TOTAL_QUESTIONS; i += 1) {
     const key = String(i);
     const bucket = db.perQuestion[key];
     const total = bucket['1'] + bucket['2'] + bucket['3'] + bucket['4'] + bucket['5'];
@@ -361,11 +377,11 @@ function buildSummary(db) {
 }
 
 function getXBand(x) {
-  if (x >= 35) return 'Сильное партнёрство';
-  if (x >= 10) return 'Умеренное партнёрство';
+  if (x >= 35) return 'Сильная открытость';
+  if (x >= 10) return 'Умеренная открытость';
   if (x >= -9) return 'Смешанная позиция';
-  if (x >= -34) return 'Умеренная конкуренция';
-  return 'Выраженная конкуренция';
+  if (x >= -34) return 'Умеренная стратегия';
+  return 'Выраженная стратегия';
 }
 
 function getYBand(y) {
