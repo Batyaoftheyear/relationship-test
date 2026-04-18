@@ -1,6 +1,8 @@
-﻿const fs = require('fs');
+const fs = require('fs');
 const path = require('path');
+require('dotenv').config({ quiet: true });
 const express = require('express');
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -8,6 +10,11 @@ const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_DIR = path.join(__dirname, 'data');
 const ANALYTICS_FILE = path.join(DATA_DIR, 'analytics.json');
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+const supabase = SUPABASE_URL && SUPABASE_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } })
+  : null;
 
 app.use(express.json({ limit: '100kb' }));
 app.use(express.static(PUBLIC_DIR));
@@ -16,7 +23,7 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
-app.post('/api/analytics/result', (req, res) => {
+app.post('/api/analytics/result', async (req, res) => {
   try {
     const payload = sanitizeAnalyticsPayload(req.body);
 
@@ -24,22 +31,20 @@ app.post('/api/analytics/result', (req, res) => {
       return res.status(400).json({ ok: false, error: 'invalid_payload' });
     }
 
-    const db = readAnalytics();
-    applyAnalyticsEvent(db, payload);
-    writeAnalytics(db);
-
+    await saveAnalyticsEvent(payload);
     return res.json({ ok: true });
   } catch (error) {
+    console.error('Analytics write failed:', error.message);
     return res.status(500).json({ ok: false, error: 'analytics_write_failed' });
   }
 });
 
-app.get('/api/analytics/summary', (req, res) => {
+app.get('/api/analytics/summary', async (req, res) => {
   try {
-    const db = readAnalytics();
-    const summary = buildSummary(db);
+    const summary = await getAnalyticsSummary();
     return res.json(summary);
   } catch (error) {
+    console.error('Analytics read failed:', error.message);
     return res.status(500).json({ ok: false, error: 'analytics_read_failed' });
   }
 });
@@ -47,6 +52,97 @@ app.get('/api/analytics/summary', (req, res) => {
 app.listen(PORT, () => {
   console.log(`http://localhost:${PORT}`);
 });
+
+async function saveAnalyticsEvent(payload) {
+  if (supabase) {
+    const { error } = await supabase.from('test_results').insert(toSupabaseRow(payload));
+    if (error) throw error;
+    return;
+  }
+
+  const db = readAnalytics();
+  applyAnalyticsEvent(db, payload);
+  writeAnalytics(db);
+}
+
+async function getAnalyticsSummary() {
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('test_results')
+      .select('created_at,x_norm,y_norm,raw_x,raw_y,quadrant,distance_percent,confidence,neutral_count,answers')
+      .order('created_at', { ascending: false })
+      .limit(5000);
+
+    if (error) throw error;
+    return buildSummaryFromRows(data || []);
+  }
+
+  return buildSummary(readAnalytics());
+}
+
+function toSupabaseRow(payload) {
+  return {
+    created_at: payload.timestamp,
+    x_norm: payload.result.normalized.x,
+    y_norm: payload.result.normalized.y,
+    raw_x: payload.result.raw.x,
+    raw_y: payload.result.raw.y,
+    quadrant: payload.result.quadrant,
+    distance_percent: payload.result.distance.percent,
+    confidence: payload.result.confidence.value,
+    neutral_count: payload.result.confidence.neutralCount,
+    answers: payload.answers
+  };
+}
+
+function buildSummaryFromRows(rows) {
+  const db = createEmptyAnalytics();
+
+  for (const row of rows) {
+    const payload = rowToAnalyticsPayload(row);
+    if (payload) applyAnalyticsEvent(db, payload);
+  }
+
+  return buildSummary(db);
+}
+
+function rowToAnalyticsPayload(row) {
+  if (!row || typeof row !== 'object') return null;
+
+  const quadrant = typeof row.quadrant === 'string' ? row.quadrant : '';
+  if (!['Гибкое партнёрство', 'Стратегическая конкуренция', 'Структурированное партнёрство', 'Фиксированная конкуренция'].includes(quadrant)) {
+    return null;
+  }
+
+  const answers = {};
+  const sourceAnswers = row.answers && typeof row.answers === 'object' ? row.answers : {};
+  for (let i = 1; i <= 24; i += 1) {
+    const value = toInteger(sourceAnswers[String(i)]);
+    if (![1, 2, 3, 4, 5].includes(value)) return null;
+    answers[String(i)] = value;
+  }
+
+  return {
+    timestamp: typeof row.created_at === 'string' ? row.created_at : new Date().toISOString(),
+    result: {
+      raw: {
+        x: clamp(toInteger(row.raw_x), -24, 24),
+        y: clamp(toInteger(row.raw_y), -18, 30)
+      },
+      normalized: {
+        x: clamp(toInteger(row.x_norm), -100, 100),
+        y: clamp(toInteger(row.y_norm), -100, 100)
+      },
+      distance: { percent: clamp(toInteger(row.distance_percent), 0, 100) },
+      confidence: {
+        value: clamp(toInteger(row.confidence), 0, 100),
+        neutralCount: clamp(toInteger(row.neutral_count), 0, 24)
+      },
+      quadrant
+    },
+    answers
+  };
+}
 
 function createEmptyAnalytics() {
   return {
@@ -141,6 +237,8 @@ function sanitizeAnalyticsPayload(input) {
   const answers = input.answers;
   if (!result || typeof result !== 'object' || !answers || typeof answers !== 'object') return null;
 
+  const rawX = toInteger(result?.raw?.x);
+  const rawY = toInteger(result?.raw?.y);
   const x = toInteger(result?.normalized?.x);
   const y = toInteger(result?.normalized?.y);
   const distancePercent = toInteger(result?.distance?.percent);
@@ -148,6 +246,7 @@ function sanitizeAnalyticsPayload(input) {
   const neutralCount = toInteger(result?.confidence?.neutralCount);
   const quadrant = typeof result?.quadrant === 'string' ? result.quadrant : '';
 
+  if (!isFiniteNumber(rawX) || !isFiniteNumber(rawY)) return null;
   if (!isFiniteNumber(x) || !isFiniteNumber(y)) return null;
   if (!isFiniteNumber(distancePercent) || !isFiniteNumber(confidence) || !isFiniteNumber(neutralCount)) return null;
   if (!['Гибкое партнёрство', 'Стратегическая конкуренция', 'Структурированное партнёрство', 'Фиксированная конкуренция'].includes(quadrant)) return null;
@@ -162,6 +261,10 @@ function sanitizeAnalyticsPayload(input) {
   return {
     timestamp: typeof input.timestamp === 'string' ? input.timestamp : new Date().toISOString(),
     result: {
+      raw: {
+        x: clamp(rawX, -24, 24),
+        y: clamp(rawY, -18, 30)
+      },
       normalized: { x: clamp(x, -100, 100), y: clamp(y, -100, 100) },
       distance: { percent: clamp(distancePercent, 0, 100) },
       confidence: {
@@ -227,6 +330,7 @@ function buildSummary(db) {
 
   return {
     ok: true,
+    source: supabase ? 'supabase' : 'local',
     submissions: n,
     averages,
     quadrants: db.quadrants,
